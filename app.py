@@ -290,7 +290,7 @@ if 'generated_image' in st.session_state:
     st.image(
         st.session_state['generated_image'],
         caption=caption_text,
-        use_container_width=True
+        use_column_width=True
     )
 
     # Show full enhanced prompt in expander
@@ -341,7 +341,7 @@ if len(st.session_state.image_history) > 0:
 
                 with cols[j]:
                     # Display image
-                    st.image(img_data['image'], use_container_width=True)
+                    st.image(img_data['image'], use_column_width=True)
 
                     # Display prompt (truncated)
                     prompt_text = img_data['prompt']
@@ -366,12 +366,11 @@ if len(st.session_state.image_history) > 0:
                         data=byte_im,
                         file_name=f"generated_{idx+1}.png",
                         mime="image/png",
-                        key=f"download_history_{idx}",
-                        use_container_width=True
+                        key=f"download_history_{idx}"
                     )
 
                     # Regenerate button
-                    if st.button("🔄 Regenerate", key=f"regen_{idx}", use_container_width=True, help="Use this prompt again"):
+                    if st.button("🔄 Regenerate", key=f"regen_{idx}", help="Use this prompt again"):
                         st.session_state['prompt_value'] = img_data['prompt']
                         st.rerun()
 
