@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 import os
 from PIL import Image
 import random
+from datetime import datetime
 
 # Load environment variables
 load_dotenv()
@@ -30,6 +31,18 @@ RANDOM_PROMPTS = [
     "A Victorian mansion at night, gothic atmosphere, moonlight",
     "A whale swimming through clouds, surreal, dreamlike"
 ]
+
+# Style presets
+STYLE_PRESETS = {
+    "None": "",
+    "Anime": ", anime style, vibrant colors, Studio Ghibli inspired, detailed illustration, hand-drawn",
+    "Realistic": ", photorealistic, highly detailed, 8K resolution, professional photography, sharp focus",
+    "Digital Art": ", digital painting, trending on artstation, concept art, smooth, sharp focus, illustration",
+    "Watercolor": ", watercolor painting, soft colors, artistic, flowing, delicate, hand-painted",
+    "Oil Painting": ", oil painting, classical art, textured brushstrokes, canvas, museum quality",
+    "Cyberpunk": ", cyberpunk style, neon lights, futuristic, sci-fi, dystopian, high-tech",
+    "Fantasy": ", fantasy art, magical, enchanted, epic, mythical, ethereal, dramatic lighting"
+}
 
 # Page configuration
 st.set_page_config(
@@ -93,6 +106,31 @@ client = get_inference_client()
 
 if not client:
     st.stop()
+
+# Initialize image history in session state
+if 'image_history' not in st.session_state:
+    st.session_state.image_history = []
+
+# Sidebar for style presets
+with st.sidebar:
+    st.header("🎨 Style Presets")
+
+    selected_style = st.selectbox(
+        "Choose a style:",
+        options=list(STYLE_PRESETS.keys()),
+        index=0,
+        help="Select a style to automatically enhance your prompt with style-specific keywords"
+    )
+
+    # Show style description
+    if selected_style != "None":
+        st.caption(f"**Style adds:** {STYLE_PRESETS[selected_style].strip(', ')}")
+    else:
+        st.caption("Using your original prompt without style modifications")
+
+    st.markdown("---")
+    st.markdown("**About Styles:**")
+    st.caption("Styles automatically add keywords to enhance your prompt and create consistent results.")
 
 # Main interface
 st.markdown("---")
@@ -159,11 +197,19 @@ if st.button("✨ Generate Image"):
         st.warning("⚠️ Please enter a description for your image.")
     else:
         try:
+            # Apply style preset to prompt
+            enhanced_prompt = prompt + STYLE_PRESETS[selected_style]
+
+            # Show enhanced prompt if style is applied
+            if selected_style != "None":
+                with st.expander("📝 Enhanced Prompt Preview"):
+                    st.text(enhanced_prompt)
+
             # Show loading state
             with st.spinner("🎨 Creating your image... This may take 10-30 seconds..."):
                 # Prepare parameters for image generation
                 generation_params = {
-                    "prompt": prompt,
+                    "prompt": enhanced_prompt,
                     "model": MODEL_NAME,
                     "width": width,
                     "height": height
@@ -179,9 +225,27 @@ if st.button("✨ Generate Image"):
                 # Store in session state
                 st.session_state['generated_image'] = image
                 st.session_state['last_prompt'] = prompt
+                st.session_state['last_enhanced_prompt'] = enhanced_prompt
+                st.session_state['last_style'] = selected_style
                 st.session_state['last_size'] = selected_size
                 if negative_prompt.strip():
                     st.session_state['last_negative_prompt'] = negative_prompt
+
+                # Add to image history
+                image_data = {
+                    'image': image,
+                    'prompt': prompt,
+                    'enhanced_prompt': enhanced_prompt,
+                    'style': selected_style,
+                    'size': selected_size,
+                    'negative_prompt': negative_prompt if negative_prompt.strip() else None,
+                    'timestamp': datetime.now()
+                }
+                st.session_state.image_history.insert(0, image_data)
+
+                # Limit history to 10 images
+                if len(st.session_state.image_history) > 10:
+                    st.session_state.image_history = st.session_state.image_history[:10]
 
             st.success("✅ Image generated successfully!")
 
@@ -213,8 +277,10 @@ st.markdown("---")
 if 'generated_image' in st.session_state:
     st.subheader("Generated Image")
 
-    # Build caption with prompt, size, and negative prompt if used
+    # Build caption with prompt, style, size, and negative prompt if used
     caption_text = f"Prompt: {st.session_state['last_prompt']}"
+    if 'last_style' in st.session_state and st.session_state['last_style'] != "None":
+        caption_text += f"\nStyle: {st.session_state['last_style']}"
     if 'last_size' in st.session_state:
         caption_text += f"\nSize: {st.session_state['last_size']}"
     if 'last_negative_prompt' in st.session_state:
@@ -226,6 +292,11 @@ if 'generated_image' in st.session_state:
         caption=caption_text,
         use_container_width=True
     )
+
+    # Show full enhanced prompt in expander
+    if 'last_enhanced_prompt' in st.session_state and st.session_state.get('last_style') != "None":
+        with st.expander("📝 View Full Prompt Used"):
+            st.text(st.session_state['last_enhanced_prompt'])
 
     # Download button
     # Convert PIL Image to bytes for download
@@ -241,6 +312,73 @@ if 'generated_image' in st.session_state:
         file_name="generated_image.png",
         mime="image/png"
     )
+
+# Image History Gallery
+st.markdown("---")
+st.markdown("---")
+
+if len(st.session_state.image_history) > 0:
+    # Header with count and clear button
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        st.header(f"📸 Image History ({len(st.session_state.image_history)} images)")
+    with col2:
+        if st.button("🗑️ Clear History", help="Delete all images from history"):
+            st.session_state.image_history = []
+            st.rerun()
+
+    st.caption("Your most recent images from this session (max 10)")
+    st.markdown("---")
+
+    # Display images in grid (3 columns)
+    for i in range(0, len(st.session_state.image_history), 3):
+        cols = st.columns(3)
+
+        for j in range(3):
+            idx = i + j
+            if idx < len(st.session_state.image_history):
+                img_data = st.session_state.image_history[idx]
+
+                with cols[j]:
+                    # Display image
+                    st.image(img_data['image'], use_container_width=True)
+
+                    # Display prompt (truncated)
+                    prompt_text = img_data['prompt']
+                    if len(prompt_text) > 50:
+                        with st.expander("View Prompt"):
+                            st.text(prompt_text)
+                    else:
+                        st.caption(f"**Prompt:** {prompt_text}")
+
+                    # Show style if not None
+                    if img_data['style'] != "None":
+                        st.caption(f"🎨 {img_data['style']}")
+
+                    # Download button for each image
+                    from io import BytesIO
+                    buf = BytesIO()
+                    img_data['image'].save(buf, format="PNG")
+                    byte_im = buf.getvalue()
+
+                    st.download_button(
+                        label="⬇️ Download",
+                        data=byte_im,
+                        file_name=f"generated_{idx+1}.png",
+                        mime="image/png",
+                        key=f"download_history_{idx}",
+                        use_container_width=True
+                    )
+
+                    # Regenerate button
+                    if st.button("🔄 Regenerate", key=f"regen_{idx}", use_container_width=True, help="Use this prompt again"):
+                        st.session_state['prompt_value'] = img_data['prompt']
+                        st.rerun()
+
+                    st.markdown("---")
+
+else:
+    st.info("📭 No images in history yet. Generate your first image above!")
 
 # Footer
 st.markdown("---")
