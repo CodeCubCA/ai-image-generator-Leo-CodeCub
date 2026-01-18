@@ -13,6 +13,24 @@ load_dotenv()
 MODEL_NAME = "black-forest-labs/FLUX.1-schnell"
 HUGGINGFACE_TOKEN = os.getenv("HUGGINGFACE_TOKEN")
 
+# Content moderation keywords - inappropriate content detection
+INAPPROPRIATE_KEYWORDS = [
+    # Explicit content
+    "nude", "naked", "nsfw", "porn", "xxx", "sex", "sexual", "erotic", "explicit",
+    "topless", "lingerie", "underwear", "bikini", "revealing", "seductive",
+    # Violence
+    "gore", "blood", "violent", "killing", "murder", "dead body", "torture",
+    "death", "brutal", "graphic violence", "corpse", "dismember",
+    # Drugs and illegal activities
+    "drug", "cocaine", "marijuana", "heroin", "meth", "drugs", "smoking weed",
+    "illegal", "weapon", "gun violence", "terrorist", "bomb",
+    # Hate speech and discrimination
+    "racist", "hate speech", "slur", "offensive", "discrimination",
+    # Other inappropriate content
+    "child", "minor", "kid", "underage", "teen", "young girl", "young boy",
+    "loli", "shota", "inappropriate", "fetish", "femboy"
+]
+
 # Random prompts for inspiration
 RANDOM_PROMPTS = [
     "A cyberpunk city at sunset, neon lights, futuristic architecture",
@@ -78,6 +96,9 @@ st.markdown("""
 st.markdown("<h1 class='main-header'>🎨 AI Image Generator</h1>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center; color: #666;'>Generate stunning images from text using AI</p>", unsafe_allow_html=True)
 
+# Content Policy Notice
+st.info("ℹ️ **Content Policy:** This tool is for creating safe, family-friendly images. Inappropriate content will be blocked.")
+
 # Check if API token is configured
 if not HUGGINGFACE_TOKEN or HUGGINGFACE_TOKEN == "your_token_here":
     st.error("⚠️ HuggingFace API token not configured!")
@@ -107,6 +128,23 @@ client = get_inference_client()
 if not client:
     st.stop()
 
+def check_content_appropriateness(text):
+    """
+    Check if the prompt contains inappropriate content.
+    Returns (is_appropriate: bool, detected_keywords: list)
+    """
+    if not text:
+        return True, []
+
+    text_lower = text.lower()
+    detected = []
+
+    for keyword in INAPPROPRIATE_KEYWORDS:
+        if keyword in text_lower:
+            detected.append(keyword)
+
+    return len(detected) == 0, detected
+
 # Initialize image history in session state
 if 'image_history' not in st.session_state:
     st.session_state.image_history = []
@@ -131,6 +169,17 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("**About Styles:**")
     st.caption("Styles automatically add keywords to enhance your prompt and create consistent results.")
+
+    st.markdown("---")
+    st.markdown("**📋 Content Policy:**")
+    st.caption("⛔ Prohibited content includes:")
+    st.caption("• Explicit or adult content")
+    st.caption("• Violence or gore")
+    st.caption("• Illegal activities")
+    st.caption("• Hate speech")
+    st.caption("• Content involving minors")
+    st.caption("")
+    st.caption("✅ Keep it safe and family-friendly!")
 
 # Main interface
 st.markdown("---")
@@ -196,6 +245,42 @@ if st.button("✨ Generate Image"):
     if not prompt.strip():
         st.warning("⚠️ Please enter a description for your image.")
     else:
+        # Check content appropriateness
+        is_appropriate, detected_keywords = check_content_appropriateness(prompt)
+
+        # Also check negative prompt if provided
+        negative_is_appropriate = True
+        negative_detected = []
+        if negative_prompt.strip():
+            negative_is_appropriate, negative_detected = check_content_appropriateness(negative_prompt)
+
+        # Combine all detected keywords
+        all_detected = detected_keywords + negative_detected
+
+        if not is_appropriate or not negative_is_appropriate:
+            st.error("🚫 **INAPPROPRIATE CONTENT DETECTED**")
+            st.warning("""
+            ⚠️ **Warning: This content is not appropriate for users under 18**
+
+            Your prompt contains inappropriate content that violates our content policy.
+            This application is designed for creating safe, family-friendly images only.
+
+            **Please note:**
+            - No explicit, violent, or adult content
+            - No inappropriate depictions of minors
+            - No hate speech or discriminatory content
+            - No illegal activities or dangerous content
+
+            Please modify your prompt to comply with our content guidelines.
+            """)
+
+            with st.expander("🔍 Detected Issues"):
+                st.write("The following inappropriate keywords were detected:")
+                for keyword in all_detected:
+                    st.write(f"- `{keyword}`")
+
+            st.stop()
+
         try:
             # Apply style preset to prompt
             enhanced_prompt = prompt + STYLE_PRESETS[selected_style]
