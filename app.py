@@ -28,7 +28,7 @@ INAPPROPRIATE_KEYWORDS = [
     "racist", "hate speech", "slur", "offensive", "discrimination",
     # Other inappropriate content
     "child", "minor", "kid", "underage", "teen", "young girl", "young boy",
-    "loli", "shota", "inappropriate", "fetish", "femboy"
+    "loli", "shota", "inappropriate", "fetish", "femboy", "femboi"
 ]
 
 # Random prompts for inspiration
